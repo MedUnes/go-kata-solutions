@@ -2,6 +2,7 @@ package concurrent_aggregator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -24,19 +25,16 @@ type OrderServiceMock struct {
 	simulatedOrders   []*order.Order
 }
 
-func (ps ProfileServiceMock) Get(ctx context.Context, id int) (*profile.Profile, error) {
-	ticker := time.NewTicker(ps.simulatedDuration)
+func (ps *ProfileServiceMock) Get(ctx context.Context, id int) (*profile.Profile, error) {
+
 	fmt.Println("Simulating profile search..")
 	select {
-	case <-ticker.C:
+	case <-time.After(ps.simulatedDuration):
 		if ps.simulatedError != nil {
 			return nil, fmt.Errorf("simulated profile search error")
 		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	}
-	if ps.simulatedError != nil {
-		return nil, fmt.Errorf("simulated profile service error")
 	}
 	for _, p := range ps.simulatedProfiles {
 		if p.Id == id {
@@ -45,16 +43,16 @@ func (ps ProfileServiceMock) Get(ctx context.Context, id int) (*profile.Profile,
 	}
 	return nil, nil
 }
-func (os OrderServiceMock) GetAll(ctx context.Context, userId int) ([]*order.Order, error) {
-	ticker := time.NewTicker(os.simulatedDuration)
+func (os *OrderServiceMock) GetAll(ctx context.Context, userId int) ([]*order.Order, error) {
 	fmt.Println("Simulating orders search..")
+	var emptyOrders []*order.Order
 	select {
-	case <-ticker.C:
+	case <-time.After(os.simulatedDuration):
 		if os.simulatedError != nil {
-			return nil, fmt.Errorf("simulated orders search error")
+			return emptyOrders, fmt.Errorf("simulated orders search error")
 		}
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return emptyOrders, ctx.Err()
 	}
 
 	var userOrders []*order.Order
@@ -68,8 +66,8 @@ func (os OrderServiceMock) GetAll(ctx context.Context, userId int) ([]*order.Ord
 }
 func TestAggregate(t *testing.T) {
 	type Input struct {
-		profileService    ProfileServiceMock
-		orderService      OrderServiceMock
+		profileService    *ProfileServiceMock
+		orderService      *OrderServiceMock
 		searchedProfileId int
 		timeout           time.Duration
 	}
@@ -89,59 +87,176 @@ func TestAggregate(t *testing.T) {
 		{Id: 4, Name: "Dave"},
 		{Id: 5, Name: "Eva"},
 	}
-	basicOrders := []*order.Order{
-		{Id: 1, UserId: 1, Cost: 100.0},
-		{Id: 2, UserId: 1, Cost: 20.6},
-		{Id: 3, UserId: 3, Cost: 30.79},
-	}
-
+	//var emptyProfiles []*profile.Profile
+	//var emptyOrders []*order.Order
+	var emptyAggregateProfiles []*AggregatedProfile
 	testCases := []TestCase{
 		{
-			"profiles fetched in one second, orders fetched in two seconds, timeout is ",
+			"no errors, profile service in time, order service in time, more than one order",
 			Input{
-				ProfileServiceMock{
-					1 * time.Second,
+				&ProfileServiceMock{
+					10 * time.Millisecond,
 					nil,
 					basicProfiles,
 				},
-				OrderServiceMock{
-					2 * time.Second,
+				&OrderServiceMock{
+					20 * time.Millisecond,
 					nil,
-					basicOrders,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{2, 1, 20.6},
+						{3, 3, 30.79},
+					},
 				},
 				1,
-				5 * time.Second,
+				100 * time.Millisecond,
+			},
+			Expected{
+				[]*AggregatedProfile{{"Alice", 100.0}, {"Alice", 20.6}},
+				nil,
+			},
+		},
+		{
+			"no errors, profile service in time, order service in time, one order",
+			Input{
+				&ProfileServiceMock{
+					10 * time.Millisecond,
+					nil,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					20 * time.Millisecond,
+					nil,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 3, 30.79},
+					},
+				},
+				1,
+				100 * time.Millisecond,
 			},
 			Expected{
 				[]*AggregatedProfile{{"Alice", 100.0}},
 				nil,
 			},
 		},
+		{
+			"no errors, profile service in time, order service in time, no orders",
+			Input{
+				&ProfileServiceMock{
+					10 * time.Millisecond,
+					nil,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					20 * time.Millisecond,
+					nil,
+					[]*order.Order{
+						{1, 2, 100.0},
+						{3, 3, 30.79},
+					},
+				},
+				1,
+				100 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				nil,
+			},
+		},
+		{
+			"no errors, profile service in time, order service timeout, more than one order",
+			Input{
+				&ProfileServiceMock{
+					10 * time.Millisecond,
+					nil,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					120 * time.Millisecond,
+					nil,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 1, 30.79},
+					},
+				},
+				1,
+				100 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				errors.New("order service timeout"),
+			},
+		},
+		{
+			"no errors, profile service in time, order service timeout, one order",
+			Input{
+				&ProfileServiceMock{
+					10 * time.Millisecond,
+					nil,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					120 * time.Millisecond,
+					nil,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 2, 30.79},
+					},
+				},
+				1,
+				100 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				errors.New("order service timeout"),
+			},
+		},
+		{
+			"no errors, profile service in time, order service timeout, no orders",
+			Input{
+				&ProfileServiceMock{
+					10 * time.Millisecond,
+					nil,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					120 * time.Millisecond,
+					nil,
+					[]*order.Order{
+						{1, 3, 100.0},
+						{3, 2, 30.79},
+					},
+				},
+				1,
+				100 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				errors.New("order service timeout"),
+			},
+		},
 	}
 	for _, tc := range testCases {
 
-		t.Run("Test aggregator function", func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			u := NewUserAggregator(
 				tc.input.orderService,
 				tc.input.profileService,
-				func(ua *UserAggregator) {
-					ua.timeout = tc.input.timeout
-				},
-				func(ua *UserAggregator) {
-					ua.logger = slog.Default()
-				},
+				WithTimeout(tc.input.timeout),
+				WithLogger(slog.Default()),
 			)
-			aggregatedProfiles, err := u.Aggregate(ctx, 1)
+			aggregatedProfiles, err := u.Aggregate(ctx, tc.input.searchedProfileId)
 
-			require.Equal(t, tc.expected.err, err)
-			require.GreaterOrEqual(t, len(aggregatedProfiles), len(tc.expected.aggregatedProfiles))
-			if len(aggregatedProfiles) > 0 {
-				ap := aggregatedProfiles[0]
-				require.IsType(t, &AggregatedProfile{}, ap)
-				assert.Equal(t, tc.expected.aggregatedProfiles[0].Name, ap.Name)
-				assert.Equal(t, tc.expected.aggregatedProfiles[0].Cost, ap.Cost)
+			if tc.expected.err != nil {
+				require.Error(t, err)
+
+			} else {
+				require.NoError(t, err)
 			}
+
+			assert.Equal(t, tc.expected.aggregatedProfiles, aggregatedProfiles)
 
 		})
 	}
