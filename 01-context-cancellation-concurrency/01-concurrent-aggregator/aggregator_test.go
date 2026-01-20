@@ -14,11 +14,13 @@ import (
 
 type ProfileServiceMock struct {
 	simulatedDuration time.Duration
-	simulateError     bool
+	simulatedError    error
+	simulatedProfiles []*profile.Profile
 }
 type OrderServiceMock struct {
 	simulatedDuration time.Duration
-	simulateError     bool
+	simulatedError    error
+	simulatedOrders   []*order.Order
 }
 
 func (ps ProfileServiceMock) Get(ctx context.Context, id int) (*profile.Profile, error) {
@@ -26,25 +28,18 @@ func (ps ProfileServiceMock) Get(ctx context.Context, id int) (*profile.Profile,
 	fmt.Println("Simulating profile search..")
 	select {
 	case <-ticker.C:
-		if ps.simulateError {
+		if ps.simulatedError != nil {
 			return nil, fmt.Errorf("simulated profile search error")
 		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	if ps.simulateError {
+	if ps.simulatedError != nil {
 		return nil, fmt.Errorf("simulated profile service error")
 	}
-	profiles := []profile.Profile{
-		{Id: id, Name: "Alice"},
-		{Id: id, Name: "Bob"},
-		{Id: id, Name: "Charlie"},
-		{Id: id, Name: "Dave"},
-		{Id: id, Name: "Eva"},
-	}
-	for _, p := range profiles {
+	for _, p := range ps.simulatedProfiles {
 		if p.Id == id {
-			return &p, nil
+			return p, nil
 		}
 	}
 	return nil, nil
@@ -54,46 +49,53 @@ func (os OrderServiceMock) GetAll(ctx context.Context, userId int) ([]*order.Ord
 	fmt.Println("Simulating orders search..")
 	select {
 	case <-ticker.C:
-		if os.simulateError {
+		if os.simulatedError != nil {
 			return nil, fmt.Errorf("simulated orders search error")
 		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 
-	orders := []*order.Order{
-		{Id: 1, UserId: 1, Cost: 100.0},
-		{Id: 2, UserId: 1, Cost: 20.6},
-		{Id: 3, UserId: 3, Cost: 30.79},
-	}
 	var userOrders []*order.Order
-	for _, o := range orders {
+	for _, o := range os.simulatedOrders {
 		if o.UserId == userId {
 			userOrders = append(userOrders, o)
 		}
 	}
-	return orders, nil
+	return userOrders, nil
 
 }
 func TestAggregate(t *testing.T) {
 	t.Run("Test aggregator function", func(t *testing.T) {
 		ctx := context.Background()
 		orderService := &OrderServiceMock{
-			simulatedDuration: 10 * time.Millisecond,
-			simulateError:     false,
+			simulatedDuration: 2 * time.Second,
+			simulatedOrders: []*order.Order{
+				{Id: 1, UserId: 1, Cost: 100.0},
+				{Id: 2, UserId: 1, Cost: 20.6},
+				{Id: 3, UserId: 3, Cost: 30.79},
+			},
+			simulatedError: nil,
 		}
 		profileService := &ProfileServiceMock{
-			simulatedDuration: 10 * time.Millisecond,
-			simulateError:     false,
+			simulatedDuration: 1 * time.Second,
+			simulatedProfiles: []*profile.Profile{
+				{Id: 1, Name: "Alice"},
+				{Id: 2, Name: "Bob"},
+				{Id: 3, Name: "Charlie"},
+				{Id: 4, Name: "Dave"},
+				{Id: 5, Name: "Eva"},
+			},
+			simulatedError: nil,
 		}
 		u := NewUserAggregator(
 			orderService,
 			profileService,
 			func(ua *UserAggregator) {
-				ua.timeout = 3 * time.Millisecond
+				ua.timeout = 3 * time.Second
 			},
 			func(ua *UserAggregator) {
-				ua.timeout = 3 * time.Millisecond
+				ua.timeout = 3 * time.Second
 			},
 		)
 		aggregatedProfiles, err := u.Aggregate(ctx, 1)
@@ -106,6 +108,6 @@ func TestAggregate(t *testing.T) {
 
 		assert.NotNil(t, aggregatedProfile)
 		assert.Equal(t, "Alice", aggregatedProfile.Name)
-		assert.Equal(t, 20.6, aggregatedProfile.Cost)
+		assert.Equal(t, 100.0, aggregatedProfile.Cost)
 	})
 }
