@@ -9,8 +9,8 @@ import (
 
 	"github.com/medunes/go-kata/01-context-cancellation-concurrency/01-concurrent-aggregator/order"
 	"github.com/medunes/go-kata/01-context-cancellation-concurrency/01-concurrent-aggregator/profile"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type ProfileServiceMock struct {
@@ -71,59 +71,62 @@ func TestAggregate(t *testing.T) {
 		profileService    ProfileServiceMock
 		orderService      OrderServiceMock
 		searchedProfileId int
+		timeout           time.Duration
 	}
 	type Expected struct {
-		aggregatedProfile *AggregatedProfile
-		err               error
+		aggregatedProfiles []*AggregatedProfile
+		err                error
 	}
 	type TestCase struct {
 		name     string
 		input    Input
 		expected Expected
 	}
+	basicProfiles := []*profile.Profile{
+		{Id: 1, Name: "Alice"},
+		{Id: 2, Name: "Bob"},
+		{Id: 3, Name: "Charlie"},
+		{Id: 4, Name: "Dave"},
+		{Id: 5, Name: "Eva"},
+	}
+	basicOrders := []*order.Order{
+		{Id: 1, UserId: 1, Cost: 100.0},
+		{Id: 2, UserId: 1, Cost: 20.6},
+		{Id: 3, UserId: 3, Cost: 30.79},
+	}
+
 	testCases := []TestCase{
 		{
-			"successful use case 1",
+			"profiles fetched in one second, orders fetched in two seconds, timeout is ",
 			Input{
 				ProfileServiceMock{
 					1 * time.Second,
 					nil,
-					[]*profile.Profile{
-						{Id: 1, Name: "Alice"},
-						{Id: 2, Name: "Bob"},
-						{Id: 3, Name: "Charlie"},
-						{Id: 4, Name: "Dave"},
-						{Id: 5, Name: "Eva"},
-					},
+					basicProfiles,
 				},
 				OrderServiceMock{
 					2 * time.Second,
 					nil,
-					[]*order.Order{
-						{Id: 1, UserId: 1, Cost: 100.0},
-						{Id: 2, UserId: 1, Cost: 20.6},
-						{Id: 3, UserId: 3, Cost: 30.79},
-					},
+					basicOrders,
 				},
 				1,
+				5 * time.Second,
 			},
 			Expected{
-				aggregatedProfile: &AggregatedProfile{
-					Name: "Alice",
-					Cost: 100.0,
-				},
+				[]*AggregatedProfile{{"Alice", 100.0}},
+				nil,
 			},
 		},
 	}
-	for _, testCase := range testCases {
+	for _, tc := range testCases {
 
 		t.Run("Test aggregator function", func(t *testing.T) {
 			ctx := context.Background()
 			u := NewUserAggregator(
-				testCase.input.orderService,
-				testCase.input.profileService,
+				tc.input.orderService,
+				tc.input.profileService,
 				func(ua *UserAggregator) {
-					ua.timeout = 3 * time.Second
+					ua.timeout = tc.input.timeout
 				},
 				func(ua *UserAggregator) {
 					ua.logger = slog.Default()
@@ -131,15 +134,15 @@ func TestAggregate(t *testing.T) {
 			)
 			aggregatedProfiles, err := u.Aggregate(ctx, 1)
 
-			assert.Nil(t, err)
-			assert.GreaterOrEqual(t, len(aggregatedProfiles), 1)
+			require.Equal(t, tc.expected.err, err)
+			require.GreaterOrEqual(t, len(aggregatedProfiles), len(tc.expected.aggregatedProfiles))
+			if len(aggregatedProfiles) > 0 {
+				ap := aggregatedProfiles[0]
+				require.IsType(t, &AggregatedProfile{}, ap)
+				assert.Equal(t, tc.expected.aggregatedProfiles[0].Name, ap.Name)
+				assert.Equal(t, tc.expected.aggregatedProfiles[0].Cost, ap.Cost)
+			}
 
-			aggregatedProfile := aggregatedProfiles[0]
-			assert.NotNil(t, aggregatedProfile)
-
-			assert.NotNil(t, aggregatedProfile)
-			assert.Equal(t, "Alice", aggregatedProfile.Name)
-			assert.Equal(t, 100.0, aggregatedProfile.Cost)
 		})
 	}
 }
