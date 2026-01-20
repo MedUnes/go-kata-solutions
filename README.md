@@ -4,6 +4,11 @@
 >
 > (Bruce Lee)
 
+[![Tests](https://github.com/medunes/go-kata-solutions/actions/workflows/tests.yaml/badge.svg)](https://github.com/medunes/go-kata-solutions/actions/workflows/tests.yaml)
+[![CodeQL](https://github.com/medunes/go-kata-solutions/actions/workflows/codeql.yaml/badge.svg)](https://github.com/medunes/go-kata-solutions/actions/workflows/codeql.yaml)
+[![codecov](https://codecov.io/gh/medunes/cash/branch/master/graph/badge.svg)](https://codecov.io/gh/medunes/cash)
+[![Go Report Card](https://goreportcard.com/badge/github.com/medunes/cash)](https://goreportcard.com/report/github.com/medunes/cash)
+
 ## What should it be?
 
 - Go is simple to learn, but nuanced to master. The difference between "working code" and "idiomatic code" often lies in details such as safety, memory efficiency, and concurrency control.
