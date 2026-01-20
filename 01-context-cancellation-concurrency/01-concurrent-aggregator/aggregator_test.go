@@ -2,7 +2,6 @@ package concurrent_aggregator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -16,12 +15,12 @@ import (
 
 type ProfileServiceMock struct {
 	simulatedDuration time.Duration
-	simulatedError    error
+	simulateError     bool
 	simulatedProfiles []*profile.Profile
 }
 type OrderServiceMock struct {
 	simulatedDuration time.Duration
-	simulatedError    error
+	simulateError     bool
 	simulatedOrders   []*order.Order
 }
 
@@ -30,7 +29,7 @@ func (ps *ProfileServiceMock) Get(ctx context.Context, id int) (*profile.Profile
 	fmt.Println("Simulating profile search..")
 	select {
 	case <-time.After(ps.simulatedDuration):
-		if ps.simulatedError != nil {
+		if ps.simulateError {
 			return nil, fmt.Errorf("simulated profile search error")
 		}
 	case <-ctx.Done():
@@ -48,7 +47,7 @@ func (os *OrderServiceMock) GetAll(ctx context.Context, userId int) ([]*order.Or
 	var emptyOrders []*order.Order
 	select {
 	case <-time.After(os.simulatedDuration):
-		if os.simulatedError != nil {
+		if os.simulateError {
 			return emptyOrders, fmt.Errorf("simulated orders search error")
 		}
 	case <-ctx.Done():
@@ -73,7 +72,7 @@ func TestAggregate(t *testing.T) {
 	}
 	type Expected struct {
 		aggregatedProfiles []*AggregatedProfile
-		err                error
+		err                bool
 	}
 	type TestCase struct {
 		name     string
@@ -96,12 +95,12 @@ func TestAggregate(t *testing.T) {
 			Input{
 				&ProfileServiceMock{
 					10 * time.Millisecond,
-					nil,
+					false,
 					basicProfiles,
 				},
 				&OrderServiceMock{
 					20 * time.Millisecond,
-					nil,
+					false,
 					[]*order.Order{
 						{1, 1, 100.0},
 						{2, 1, 20.6},
@@ -113,7 +112,7 @@ func TestAggregate(t *testing.T) {
 			},
 			Expected{
 				[]*AggregatedProfile{{"Alice", 100.0}, {"Alice", 20.6}},
-				nil,
+				false,
 			},
 		},
 		{
@@ -121,12 +120,12 @@ func TestAggregate(t *testing.T) {
 			Input{
 				&ProfileServiceMock{
 					10 * time.Millisecond,
-					nil,
+					false,
 					basicProfiles,
 				},
 				&OrderServiceMock{
 					20 * time.Millisecond,
-					nil,
+					false,
 					[]*order.Order{
 						{1, 1, 100.0},
 						{3, 3, 30.79},
@@ -137,7 +136,7 @@ func TestAggregate(t *testing.T) {
 			},
 			Expected{
 				[]*AggregatedProfile{{"Alice", 100.0}},
-				nil,
+				false,
 			},
 		},
 		{
@@ -145,12 +144,12 @@ func TestAggregate(t *testing.T) {
 			Input{
 				&ProfileServiceMock{
 					10 * time.Millisecond,
-					nil,
+					false,
 					basicProfiles,
 				},
 				&OrderServiceMock{
 					20 * time.Millisecond,
-					nil,
+					false,
 					[]*order.Order{
 						{1, 2, 100.0},
 						{3, 3, 30.79},
@@ -161,7 +160,7 @@ func TestAggregate(t *testing.T) {
 			},
 			Expected{
 				emptyAggregateProfiles,
-				nil,
+				false,
 			},
 		},
 		{
@@ -169,12 +168,12 @@ func TestAggregate(t *testing.T) {
 			Input{
 				&ProfileServiceMock{
 					10 * time.Millisecond,
-					nil,
+					false,
 					basicProfiles,
 				},
 				&OrderServiceMock{
 					120 * time.Millisecond,
-					nil,
+					false,
 					[]*order.Order{
 						{1, 1, 100.0},
 						{3, 1, 30.79},
@@ -185,7 +184,7 @@ func TestAggregate(t *testing.T) {
 			},
 			Expected{
 				emptyAggregateProfiles,
-				errors.New("order service timeout"),
+				true,
 			},
 		},
 		{
@@ -193,12 +192,12 @@ func TestAggregate(t *testing.T) {
 			Input{
 				&ProfileServiceMock{
 					10 * time.Millisecond,
-					nil,
+					false,
 					basicProfiles,
 				},
 				&OrderServiceMock{
 					120 * time.Millisecond,
-					nil,
+					false,
 					[]*order.Order{
 						{1, 1, 100.0},
 						{3, 2, 30.79},
@@ -209,7 +208,7 @@ func TestAggregate(t *testing.T) {
 			},
 			Expected{
 				emptyAggregateProfiles,
-				errors.New("order service timeout"),
+				true,
 			},
 		},
 		{
@@ -217,12 +216,12 @@ func TestAggregate(t *testing.T) {
 			Input{
 				&ProfileServiceMock{
 					10 * time.Millisecond,
-					nil,
+					false,
 					basicProfiles,
 				},
 				&OrderServiceMock{
 					120 * time.Millisecond,
-					nil,
+					false,
 					[]*order.Order{
 						{1, 3, 100.0},
 						{3, 2, 30.79},
@@ -233,7 +232,7 @@ func TestAggregate(t *testing.T) {
 			},
 			Expected{
 				emptyAggregateProfiles,
-				errors.New("order service timeout"),
+				true,
 			},
 		},
 	}
@@ -249,7 +248,7 @@ func TestAggregate(t *testing.T) {
 			)
 			aggregatedProfiles, err := u.Aggregate(ctx, tc.input.searchedProfileId)
 
-			if tc.expected.err != nil {
+			if tc.expected.err {
 				require.Error(t, err)
 
 			} else {
