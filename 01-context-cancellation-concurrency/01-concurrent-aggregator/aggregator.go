@@ -1,7 +1,7 @@
 package concurrent_aggregator
 
 import (
-        	"context"
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
