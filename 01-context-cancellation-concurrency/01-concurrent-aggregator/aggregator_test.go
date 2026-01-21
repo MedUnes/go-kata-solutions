@@ -65,10 +65,11 @@ func (os *OrderServiceMock) GetAll(ctx context.Context, userId int) ([]*order.Or
 }
 func TestAggregate(t *testing.T) {
 	type Input struct {
-		profileService    *ProfileServiceMock
-		orderService      *OrderServiceMock
-		searchedProfileId int
-		timeout           time.Duration
+		profileService        *ProfileServiceMock
+		orderService          *OrderServiceMock
+		searchedProfileId     int
+		timeout               time.Duration
+		parentContextDuration time.Duration
 	}
 	type Expected struct {
 		aggregatedProfiles []*AggregatedProfile
@@ -109,6 +110,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				[]*AggregatedProfile{{"Alice", 100.0}, {"Alice", 20.6}},
@@ -133,6 +135,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				[]*AggregatedProfile{{"Alice", 100.0}},
@@ -157,6 +160,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -181,6 +185,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -205,6 +210,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -229,6 +235,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -253,6 +260,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -277,6 +285,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				0 * time.Millisecond,
+				0,
 			},
 			Expected{
 				[]*AggregatedProfile{{"Alice", 100.0}, {"Alice", 30.79}},
@@ -301,6 +310,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				0 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -325,6 +335,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				0 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -349,6 +360,7 @@ func TestAggregate(t *testing.T) {
 				},
 				1,
 				0 * time.Millisecond,
+				0,
 			},
 			Expected{
 				emptyAggregateProfiles,
@@ -362,6 +374,7 @@ func TestAggregate(t *testing.T) {
 				&OrderServiceMock{10 * time.Millisecond, true, nil}, // Error here
 				1,
 				100 * time.Millisecond,
+				0,
 			},
 			Expected{
 				nil,
@@ -375,6 +388,21 @@ func TestAggregate(t *testing.T) {
 				&OrderServiceMock{10 * time.Millisecond, false, nil},
 				1,
 				50 * time.Millisecond,
+				0,
+			},
+			Expected{
+				nil,
+				true,
+			},
+		},
+		{
+			"parent context cancellation propagates correctly",
+			Input{
+				&ProfileServiceMock{200 * time.Millisecond, false, basicProfiles},
+				&OrderServiceMock{10 * time.Millisecond, false, nil},
+				1,
+				500 * time.Millisecond,
+				100,
 			},
 			Expected{
 				nil,
@@ -386,6 +414,11 @@ func TestAggregate(t *testing.T) {
 
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
+			if tc.input.parentContextDuration > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.input.parentContextDuration)
+				defer cancel()
+			}
 			u := NewUserAggregator(
 				tc.input.orderService,
 				tc.input.profileService,
