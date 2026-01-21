@@ -355,6 +355,32 @@ func TestAggregate(t *testing.T) {
 				true,
 			},
 		},
+		{
+			"order service error propagates correctly",
+			Input{
+				&ProfileServiceMock{10 * time.Millisecond, false, basicProfiles},
+				&OrderServiceMock{10 * time.Millisecond, true, nil}, // Error here
+				1,
+				100 * time.Millisecond,
+			},
+			Expected{
+				nil,
+				true,
+			},
+		},
+		{
+			"timeout error propagates correctly",
+			Input{
+				&ProfileServiceMock{200 * time.Millisecond, false, basicProfiles},
+				&OrderServiceMock{10 * time.Millisecond, false, nil},
+				1,
+				50 * time.Millisecond,
+			},
+			Expected{
+				nil,
+				true,
+			},
+		},
 	}
 	for _, tc := range testCases {
 
