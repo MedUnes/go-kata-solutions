@@ -1,6 +1,7 @@
 package concurrent_aggregator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -419,23 +420,32 @@ func TestAggregate(t *testing.T) {
 				ctx, cancel = context.WithTimeout(ctx, tc.input.parentContextDuration)
 				defer cancel()
 			}
+			var buf bytes.Buffer
+			spyLogger := slog.New(slog.NewJSONHandler(&buf, nil))
 			u := NewUserAggregator(
 				tc.input.orderService,
 				tc.input.profileService,
 				WithTimeout(tc.input.timeout),
-				WithLogger(slog.Default()),
+				WithLogger(spyLogger),
 			)
 			aggregatedProfiles, err := u.Aggregate(ctx, tc.input.searchedProfileId)
-
+			logOutput := buf.String()
 			if tc.expected.err {
 				require.Error(t, err)
+				assert.Contains(t, logOutput, "error")
 
 			} else {
 				require.NoError(t, err)
+				assert.Contains(t, logOutput, "aggregation complete successfully")
+				assert.Contains(t, logOutput, "user_id")
 			}
 
 			assert.Equal(t, tc.expected.aggregatedProfiles, aggregatedProfiles)
 
 		})
 	}
+}
+
+func TestWithLogger(t *testing.T) {
+
 }

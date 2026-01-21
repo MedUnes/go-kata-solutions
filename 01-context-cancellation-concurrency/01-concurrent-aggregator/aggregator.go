@@ -34,7 +34,11 @@ type UserAggregator struct {
 }
 
 func NewUserAggregator(os order.Service, ps profile.Service, opts ...Option) *UserAggregator {
-	ua := &UserAggregator{orderService: os, profileService: ps}
+	ua := &UserAggregator{
+		orderService:   os,
+		profileService: ps,
+		logger:         slog.Default(), // avoid nil panics, default writes to stderr
+	}
 	for _, opt := range opts {
 		opt(ua)
 	}
@@ -61,11 +65,13 @@ func (ua *UserAggregator) Aggregate(ctx context.Context, id int) ([]*AggregatedP
 		localCtx, cancel = context.WithCancel(ctx)
 	}
 	defer cancel()
+	ua.logger.Info("starting aggregation", "user_id", id)
 	g, localCtx = errgroup.WithContext(localCtx)
 	g.Go(func() error {
 		var err error
 		pr, err = ua.profileService.Get(localCtx, id)
 		if err != nil {
+			ua.logger.Warn("failed to fetch profile", "user_id", id, "err", err)
 			return fmt.Errorf("profile fetch failed: %w", err)
 		}
 		return nil
@@ -74,6 +80,7 @@ func (ua *UserAggregator) Aggregate(ctx context.Context, id int) ([]*AggregatedP
 		var err error
 		or, err = ua.orderService.GetAll(localCtx, id)
 		if err != nil {
+			ua.logger.Warn("failed to fetch order", "user_id", id, "err", err)
 			return fmt.Errorf("order fetch failed: %w", err)
 		}
 		return nil
@@ -82,6 +89,7 @@ func (ua *UserAggregator) Aggregate(ctx context.Context, id int) ([]*AggregatedP
 
 	err := g.Wait()
 	if err != nil {
+		ua.logger.Warn("aggregator exited with error", "user_id", id, "err", err)
 		return nil, err
 	}
 	for _, o := range or {
@@ -89,5 +97,6 @@ func (ua *UserAggregator) Aggregate(ctx context.Context, id int) ([]*AggregatedP
 			au = append(au, &AggregatedProfile{pr.Name, o.Cost})
 		}
 	}
+	ua.logger.Info("aggregation complete successfully", "user_id", id, "count", len(au))
 	return au, nil
 }
