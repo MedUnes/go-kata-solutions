@@ -402,7 +402,7 @@ func TestAggregate(t *testing.T) {
 				&OrderServiceMock{10 * time.Millisecond, false, nil},
 				1,
 				500 * time.Millisecond,
-				100,
+				100 * time.Millisecond,
 			},
 			Expected{
 				nil,
