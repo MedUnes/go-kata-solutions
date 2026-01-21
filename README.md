@@ -1,8 +1,13 @@
 # 🥋 Go Katas 🥋
 
+[![Tests](https://github.com/medunes/go-kata-solutions/actions/workflows/tests.yaml/badge.svg)](https://github.com/medunes/go-kata-solutions/actions/workflows/tests.yaml)
+[![CodeQL](https://github.com/MedUnes/go-kata-solutions/actions/workflows/codeq.yaml/badge.svg)](https://github.com/MedUnes/go-kata-solutions/actions/workflows/codeq.yaml)
+[![codecov](https://codecov.io/gh/medunes/go-kata-solutions/branch/master/graph/badge.svg)](https://codecov.io/gh/medunes/go-kata-solutions)
+
 > "I fear not the man who has practiced 10,000 kicks once, but I fear the man who has practiced one kick 10,000 times."
 >
 > (Bruce Lee)
+
 
 ## What should it be?
 
