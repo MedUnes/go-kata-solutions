@@ -66,7 +66,7 @@ func (ua *UserAggregator) Aggregate(ctx context.Context, id int) ([]*AggregatedP
 		var err error
 		pr, err = ua.profileService.Get(localCtx, id)
 		if err != nil {
-			return fmt.Errorf("profile not found")
+			return fmt.Errorf("profile fetch failed: %w", err)
 		}
 		return nil
 	})
@@ -74,7 +74,7 @@ func (ua *UserAggregator) Aggregate(ctx context.Context, id int) ([]*AggregatedP
 		var err error
 		or, err = ua.orderService.GetAll(localCtx, id)
 		if err != nil {
-			return fmt.Errorf("profile not found")
+			return fmt.Errorf("order fetch failed: %w", err)
 		}
 		return nil
 
