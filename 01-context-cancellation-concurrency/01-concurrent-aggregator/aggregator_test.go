@@ -235,6 +235,102 @@ func TestAggregate(t *testing.T) {
 				true,
 			},
 		},
+		{
+			"no errors, profile service timeout, order service in time, more than one order",
+			Input{
+				&ProfileServiceMock{
+					120 * time.Millisecond,
+					false,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					20 * time.Millisecond,
+					false,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 1, 30.79},
+					},
+				},
+				1,
+				100 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				true,
+			},
+		},
+		{
+			"no service timeout, no errors, more than one order",
+			Input{
+				&ProfileServiceMock{
+					120 * time.Millisecond,
+					false,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					150 * time.Millisecond,
+					false,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 1, 30.79},
+					},
+				},
+				1,
+				0 * time.Millisecond,
+			},
+			Expected{
+				[]*AggregatedProfile{{"Alice", 100.0}, {"Alice", 30.79}},
+				false,
+			},
+		},
+		{
+			"no service timeout, profile error, more than one order",
+			Input{
+				&ProfileServiceMock{
+					120 * time.Millisecond,
+					true,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					150 * time.Millisecond,
+					false,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 1, 30.79},
+					},
+				},
+				1,
+				0 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				true,
+			},
+		},
+		{
+			"no service timeout, profile error, order error, profile and order take same time",
+			Input{
+				&ProfileServiceMock{
+					120 * time.Millisecond,
+					true,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					120 * time.Millisecond,
+					true,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 1, 30.79},
+					},
+				},
+				1,
+				0 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				true,
+			},
+		},
 	}
 	for _, tc := range testCases {
 
