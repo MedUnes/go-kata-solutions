@@ -308,6 +308,30 @@ func TestAggregate(t *testing.T) {
 			},
 		},
 		{
+			"no service timeout, order error, more than one order",
+			Input{
+				&ProfileServiceMock{
+					70 * time.Millisecond,
+					false,
+					basicProfiles,
+				},
+				&OrderServiceMock{
+					100 * time.Millisecond,
+					true,
+					[]*order.Order{
+						{1, 1, 100.0},
+						{3, 1, 30.79},
+					},
+				},
+				1,
+				0 * time.Millisecond,
+			},
+			Expected{
+				emptyAggregateProfiles,
+				true,
+			},
+		},
+		{
 			"no service timeout, profile error, order error, profile and order take same time",
 			Input{
 				&ProfileServiceMock{
